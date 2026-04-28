@@ -1,0 +1,280 @@
+import type { PageConfig } from "../_components/PageScaffold";
+
+type RegistryItem = PageConfig & {
+  path: string;
+};
+
+export const pageRegistry: RegistryItem[] = [
+  {
+    path: "/dashboard",
+    title: "Bosh panel",
+    description: "Klinikaning bugungi bemorlar oqimi, tushumi va muhim ogohlantirishlari.",
+    tableTitle: "Bugungi operatsion holat",
+    tableColumns: ["Ko'rsatkich", "Status", "Mas'ul", "Oxirgi o'zgarish"],
+    metrics: [
+      { label: "Bugungi bemorlar", value: "86", tone: "good" },
+      { label: "Tushum", value: "18.4 mln", tone: "neutral" },
+      { label: "Qarzdorlik", value: "2.1 mln", tone: "warning" },
+      { label: "Kechikkan jarayon", value: "4", tone: "danger" },
+    ],
+    sections: ["Registratura oqimi", "Shifokorlar yuklamasi", "Kassa holati"],
+  },
+  {
+    path: "/reception",
+    title: "Registratura",
+    description: "Bemorlarni ro'yxatdan o'tkazish, qabulga yozish va klinika ichida yo'naltirish.",
+    primaryAction: "Yangi qabul",
+    primaryHref: "/reception/appointments/new",
+    tableTitle: "Bugungi qabullar",
+    tableColumns: ["Bemor", "Status", "Shifokor", "Sana"],
+    sections: ["Tez qidiruv", "Kelgan bemorlar", "Telefon orqali yozilganlar"],
+  },
+  {
+    path: "/reception/schedule",
+    title: "Qabul jadvali",
+    description: "Shifokorlar bo'yicha band va bo'sh vaqtlarni ko'rish.",
+    primaryAction: "Qabul qo'shish",
+    primaryHref: "/reception/appointments/new",
+    tableTitle: "Jadval",
+    tableColumns: ["Vaqt", "Status", "Shifokor", "Bemor"],
+  },
+  {
+    path: "/reception/appointments/new",
+    title: "Yangi qabul",
+    description: "Bemor, shifokor, xizmat, sana va vaqtni tanlab qabul yaratish.",
+    primaryAction: "Saqlash",
+    tableTitle: "Qabul yaratish bosqichlari",
+    sections: ["Bemor tanlash", "Xizmat tanlash", "Vaqt tanlash", "Tasdiqlash"],
+  },
+  {
+    path: "/reception/appointments",
+    title: "Qabullar ro'yxati",
+    description: "Barcha qabullarni sana, shifokor, bemor va status bo'yicha ko'rish.",
+    primaryAction: "Yangi qabul",
+    primaryHref: "/reception/appointments/new",
+    tableTitle: "Qabullar",
+    tableColumns: ["Bemor", "Status", "Shifokor", "Sana"],
+  },
+  {
+    path: "/patients",
+    title: "Bemorlar",
+    description: "Klinikadagi bemorlar bazasi va yagona bemor kartalari.",
+    primaryAction: "Yangi bemor",
+    primaryHref: "/patients/new",
+    tableTitle: "Bemorlar ro'yxati",
+    tableColumns: ["Bemor", "Status", "Telefon", "Oxirgi qabul"],
+  },
+  {
+    path: "/patients/new",
+    title: "Yangi bemor",
+    description: "Yangi bemor kartasini yaratish va asosiy ma'lumotlarni kiritish.",
+    primaryAction: "Bemorni saqlash",
+    tableTitle: "Bemor kartasi bloklari",
+    sections: ["Shaxsiy ma'lumot", "Aloqa", "Qo'shimcha eslatma"],
+  },
+  {
+    path: "/patients/:id",
+    title: "Bemor kartasi",
+    description: "Bemorning umumiy profili, qabullari, to'lovlari va tibbiy tarixiga kirish.",
+    primaryAction: "Qabulga yozish",
+    primaryHref: "/reception/appointments/new",
+    tableTitle: "Bemor tarixi",
+    tableColumns: ["Sana", "Status", "Mas'ul", "Izoh"],
+    sections: ["Qabul tarixi", "To'lovlar", "Hujjatlar", "Eslatmalar"],
+  },
+  {
+    path: "/patients/:id/medical-history",
+    title: "Bemor tibbiy tarixi",
+    description: "Shifokor yozuvlari, tashxislar, laboratoriya va diagnostika natijalari.",
+    tableTitle: "Tibbiy tarix",
+    tableColumns: ["Sana", "Status", "Shifokor", "Xulosa"],
+  },
+  {
+    path: "/doctor",
+    title: "Shifokor ish stoli",
+    description: "Shifokorning bugungi qabullari va bemor bilan ishlash jarayoni.",
+    tableTitle: "Bugungi bemorlar",
+    tableColumns: ["Bemor", "Status", "Qabul turi", "Sana"],
+    sections: ["Kutayotganlar", "Qabulda", "Yakunlanganlar"],
+  },
+  {
+    path: "/doctor/appointments/:id",
+    title: "Shifokor qabul oynasi",
+    description: "Shikoyat, ko'rik, tashxis, tavsiya va yo'llanmalarni yuritish.",
+    primaryAction: "Qabulni yakunlash",
+    tableTitle: "Qabul bloklari",
+    sections: ["Shikoyatlar", "Ko'rik", "Tashxis", "Tavsiyalar", "Yo'llanmalar"],
+  },
+  {
+    path: "/laboratory",
+    title: "Laboratoriya",
+    description: "Laboratoriya buyurtmalari, namuna olish va natijalarni boshqarish.",
+    tableTitle: "Laboratoriya oqimi",
+    tableColumns: ["Bemor", "Status", "Tahlil", "Sana"],
+  },
+  {
+    path: "/laboratory/orders",
+    title: "Laboratoriya buyurtmalari",
+    description: "Barcha laboratoriya buyurtmalarini status va sana bo'yicha ko'rish.",
+    tableTitle: "Buyurtmalar",
+    tableColumns: ["Bemor", "Status", "Tahlil", "Shifokor"],
+  },
+  {
+    path: "/laboratory/orders/:id/results",
+    title: "Laboratoriya natijasi",
+    description: "Tahlil natijalarini kiritish va tasdiqlashga yuborish.",
+    primaryAction: "Natijani saqlash",
+    sections: ["Natija qiymatlari", "Norma oralig'i", "Izoh", "Tasdiqlash"],
+  },
+  {
+    path: "/diagnostics",
+    title: "Diagnostika",
+    description: "Instrumental tekshiruvlar, jadval va xulosalarni boshqarish.",
+    tableTitle: "Diagnostika oqimi",
+    tableColumns: ["Bemor", "Status", "Tekshiruv", "Mutaxassis"],
+  },
+  {
+    path: "/diagnostics/orders",
+    title: "Diagnostika buyurtmalari",
+    description: "Diagnostika yo'llanmalari va tekshiruv holatlarini ko'rish.",
+    tableTitle: "Buyurtmalar",
+    tableColumns: ["Bemor", "Status", "Tekshiruv", "Sana"],
+  },
+  {
+    path: "/diagnostics/orders/:id/conclusion",
+    title: "Diagnostika xulosasi",
+    description: "Xulosa kiritish, fayl biriktirish va natijani shifokorga yuborish.",
+    primaryAction: "Xulosani tasdiqlash",
+    sections: ["Tekshiruv ma'lumoti", "Xulosa matni", "Fayllar", "Yuborish"],
+  },
+  {
+    path: "/cashier",
+    title: "Kassa",
+    description: "To'lovlar, qarzdorliklar, chegirmalar va kassa yopilishini boshqarish.",
+    primaryAction: "To'lov yaratish",
+    primaryHref: "/cashier/payments/new",
+    tableTitle: "To'lov kutayotganlar",
+    tableColumns: ["Bemor", "Status", "Summa", "Xizmat"],
+  },
+  {
+    path: "/cashier/payments/new",
+    title: "To'lov yaratish",
+    description: "Bemor xizmatlari asosida to'lov qabul qilish.",
+    primaryAction: "To'lovni saqlash",
+    sections: ["Bemor", "Xizmatlar", "To'lov usuli", "Chegirma"],
+  },
+  {
+    path: "/cashier/payments",
+    title: "To'lovlar ro'yxati",
+    description: "Barcha to'lovlar, qaytarimlar va statuslarni ko'rish.",
+    tableTitle: "To'lovlar",
+    tableColumns: ["Bemor", "Status", "Summa", "Sana"],
+  },
+  {
+    path: "/cashier/debts",
+    title: "Qarzdorliklar",
+    description: "Bemorlar, korporativ mijozlar va sug'urta bo'yicha qarzdorliklar.",
+    tableTitle: "Qarzdorlar",
+    tableColumns: ["Bemor", "Status", "Summa", "Oxirgi to'lov"],
+  },
+  {
+    path: "/services",
+    title: "Xizmatlar",
+    description: "Klinika xizmatlari, kategoriyalar, narxlar va paketlar.",
+    primaryAction: "Yangi xizmat",
+    primaryHref: "/services/new",
+    tableTitle: "Xizmatlar katalogi",
+    tableColumns: ["Nomi", "Status", "Summa", "Kategoriya"],
+  },
+  {
+    path: "/services/new",
+    title: "Yangi xizmat",
+    description: "Yangi klinika xizmati va narxini katalogga qo'shish.",
+    primaryAction: "Xizmatni saqlash",
+    sections: ["Asosiy ma'lumot", "Narx", "Kategoriya", "To'lov qoidasi"],
+  },
+  {
+    path: "/documents",
+    title: "Tibbiy hujjatlar",
+    description: "Xulosalar, retseptlar, ma'lumotnomalar va chop etiladigan hujjatlar.",
+    tableTitle: "Hujjatlar",
+    tableColumns: ["Nomi", "Status", "Bemor", "Sana"],
+  },
+  {
+    path: "/documents/templates",
+    title: "Hujjat shablonlari",
+    description: "Retsept, xulosa, laboratoriya natijasi va ma'lumotnoma shablonlari.",
+    primaryAction: "Shablon qo'shish",
+    tableTitle: "Shablonlar",
+  },
+  {
+    path: "/access/users",
+    title: "Foydalanuvchilar",
+    description: "Tizim foydalanuvchilari, rollari va statuslarini boshqarish.",
+    primaryAction: "Foydalanuvchi qo'shish",
+    tableTitle: "Foydalanuvchilar",
+    tableColumns: ["Nomi", "Status", "Rol", "Oxirgi kirish"],
+  },
+  {
+    path: "/access/roles",
+    title: "Rollar",
+    description: "Tizim rollari va har bir rolning vazifasini boshqarish.",
+    primaryAction: "Rol qo'shish",
+    tableTitle: "Rollar",
+    tableColumns: ["Nomi", "Status", "Foydalanuvchilar", "Oxirgi o'zgarish"],
+  },
+  {
+    path: "/access/permissions-matrix",
+    title: "Ruxsatlar matritsasi",
+    description: "Rollar va modullar kesimida ko'rish, yaratish, o'zgartirish va tasdiqlash ruxsatlari.",
+    tableTitle: "Ruxsatlar",
+    tableColumns: ["Modul", "Status", "Rol", "Ruxsat turi"],
+  },
+  {
+    path: "/audit",
+    title: "Audit jurnali",
+    description: "Tizimdagi muhim amallar, o'zgarishlar va kirishlar tarixi.",
+    tableTitle: "Audit yozuvlari",
+    tableColumns: ["Amal", "Status", "Foydalanuvchi", "Sana"],
+  },
+  {
+    path: "/settings",
+    title: "Sozlamalar",
+    description: "Klinika, ish vaqti, to'lov usullari va umumiy tizim qoidalari.",
+    tableTitle: "Sozlama bo'limlari",
+    sections: ["Klinika ma'lumotlari", "Ish vaqti", "To'lov usullari", "Qabul qoidalari"],
+  },
+  {
+    path: "/queue",
+    title: "Navbat",
+    description: "Klinika ichidagi bemor harakatini real vaqt holatida ko'rish.",
+    tableTitle: "Aktiv navbat",
+    tableColumns: ["Bemor", "Status", "Bo'lim", "Sana"],
+  },
+  {
+    path: "/reports",
+    title: "Hisobotlar",
+    description: "Moliyaviy va operatsion ko'rsatkichlarni davrlar bo'yicha tahlil qilish.",
+    tableTitle: "Hisobotlar ro'yxati",
+  },
+];
+
+export function getPageConfig(pathname: string): PageConfig {
+  const normalized = pathname === "/" ? "/dashboard" : pathname.replace(/\/$/, "");
+  const exact = pageRegistry.find((page) => page.path === normalized);
+  if (exact) return exact;
+
+  const dynamic = pageRegistry.find((page) => {
+    const pattern = `^${page.path.replace(/:[^/]+/g, "[^/]+")}$`;
+    return new RegExp(pattern).test(normalized);
+  });
+
+  if (dynamic) return dynamic;
+
+  return {
+    title: "Sahifa tayyorlanmoqda",
+    description: "Bu route sahifalar xaritasida bor, keyingi bosqichda alohida to'ldiriladi.",
+    tableTitle: "Ishlanadigan bloklar",
+    sections: ["Route tekshirish", "Sahifa vazifasi", "Ruxsatlar", "Workflow"],
+  };
+}
