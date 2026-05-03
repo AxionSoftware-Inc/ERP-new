@@ -1,5 +1,15 @@
 import type { Appointment, AppointmentListItem } from "../types/appointments";
 import type { InvoiceDetailResponse, InvoiceSummary } from "../types/billing";
+import type {
+  DoctorActiveEncountersResponse,
+  DoctorClinicalHistoryResponse,
+  DoctorCompletedConsultationsResponse,
+  DoctorQueueResponse,
+  DoctorReviewQueueResponse,
+  DoctorTemplatesResponse,
+  DoctorVisitDetailResponse,
+  DoctorWorkspaceResponse as DoctorModuleWorkspaceResponse,
+} from "../types/doctor";
 import type { LabOrderDetailResponse, LabOrderSummary } from "../types/lab";
 import type { PatientDetailResponse, PatientListItem } from "../types/patients";
 import type {
@@ -26,6 +36,16 @@ import type {
 import { getMockAppointmentById, mockAppointmentListItems } from "../mock/appointments";
 import { getMockInvoiceDetail, mockInvoiceSummaries } from "../mock/billing";
 import { getMockDocumentsForPatient } from "../mock/documents";
+import {
+  getMockDoctorActiveEncounters,
+  getMockDoctorClinicalHistory,
+  getMockDoctorCompletedConsultations,
+  getMockDoctorQueue,
+  getMockDoctorReviewQueue,
+  getMockDoctorTemplates,
+  getMockDoctorVisitDetail,
+  getMockDoctorWorkspace,
+} from "../mock/doctor";
 import { getMockLabOrderDetail, mockLabOrderSummaries, mockLabResultSummaries } from "../mock/lab";
 import { getMockPatientById, mockPatientListItems } from "../mock/patients";
 import {
@@ -135,6 +155,38 @@ export function previewReceptionIntake(draft: ReceptionIntakeDraft): Promise<Rec
 
 export function getDoctorWorkspace(): Promise<DoctorWorkspaceResponse> {
   return Promise.resolve(mockDoctorWorkspace);
+}
+
+export function getDoctorModuleWorkspace(): Promise<DoctorModuleWorkspaceResponse> {
+  return Promise.resolve(getMockDoctorWorkspace());
+}
+
+export function getDoctorQueue(): Promise<DoctorQueueResponse> {
+  return Promise.resolve(getMockDoctorQueue());
+}
+
+export function getDoctorActiveEncounters(): Promise<DoctorActiveEncountersResponse> {
+  return Promise.resolve(getMockDoctorActiveEncounters());
+}
+
+export function getDoctorReviews(): Promise<DoctorReviewQueueResponse> {
+  return Promise.resolve(getMockDoctorReviewQueue());
+}
+
+export function getDoctorCompletedConsultations(): Promise<DoctorCompletedConsultationsResponse> {
+  return Promise.resolve(getMockDoctorCompletedConsultations());
+}
+
+export function getDoctorVisit(id: string): Promise<DoctorVisitDetailResponse | undefined> {
+  return Promise.resolve(getMockDoctorVisitDetail(id));
+}
+
+export function getDoctorTemplates(): Promise<DoctorTemplatesResponse> {
+  return Promise.resolve(getMockDoctorTemplates());
+}
+
+export function getDoctorClinicalHistory(patientId?: string): Promise<DoctorClinicalHistoryResponse> {
+  return Promise.resolve(getMockDoctorClinicalHistory(patientId));
 }
 
 export function getLabWorkspace(): Promise<LabWorkspaceResponse> {

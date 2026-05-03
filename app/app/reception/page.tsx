@@ -1,749 +1,360 @@
 import Link from "next/link";
+import { WorkbenchListCard } from "@/components/workbench/workbench-list-card";
+import { WorkbenchRowLimit } from "@/components/workbench/workbench-row-limit";
+import { WorkbenchTableHeader, WorkbenchTableRow } from "@/components/workbench/workbench-table-row";
 import { getReceptionQueueControl, getReceptionWorkspace } from "@/lib/api/client";
-import { mockBranches } from "@/lib/mock/shared";
 import type { AppointmentListItem } from "@/lib/types/appointments";
 import type { PatientListItem } from "@/lib/types/patients";
-import type { ReceptionDoctorAvailability, ReceptionQueueItem } from "@/lib/types/reception";
+import type { ReceptionDelayedCase, ReceptionDoctorAvailability, ReceptionQueueItem } from "@/lib/types/reception";
 import type { NextActionData, StatusBadgeData } from "@/lib/types/shared";
 import type { VisitListItem } from "@/lib/types/visits";
-import { StatusBadge } from "@/components/status/status-badge";
-import { OperatorCaseRow } from "@/components/workspace/operator-case-row";
-import { QueueSection } from "@/components/workspace/queue-section";
-import { SummaryStrip } from "@/components/workspace/summary-strip";
-import { WorkspaceHeader } from "@/components/workspace/workspace-header";
-import {
-  WorkspaceRightPanel,
-  type WorkspaceRightPanelSection,
-} from "@/components/workspace/workspace-right-panel";
 
-export default async function ReceptionWorkspacePage() {
-  const [workspace, queueControl] = await Promise.all([
+type QueueKey = "needs_action" | "in_progress" | "billing" | "closed" | "all";
+
+type Props = {
+  searchParams?: Promise<{ queue?: string }>;
+};
+
+export default async function ReceptionWorkspacePage({ searchParams }: Props) {
+  const [resolvedSearchParams, workspace, queueControl] = await Promise.all([
+    searchParams ?? Promise.resolve({} as { queue?: string }),
     getReceptionWorkspace(),
     getReceptionQueueControl(),
   ]);
+  const selectedQueueKey = normalizeQueueKey(resolvedSearchParams.queue);
   const queueItemsByVisitId = new Map(queueControl.queues.byWaitingTime.items.map((item) => [item.id, item]));
-  const activeCaseCount =
-    workspace.queues.needsAction.count +
-    workspace.queues.inProgress.count +
-    workspace.queues.billingAndClosing.count;
-  const priorityVisits = dedupeVisits([
-    ...workspace.queues.needsAction.items,
-    ...workspace.queues.billingAndClosing.items,
-    ...workspace.rightPanel.delayedCases,
-  ]).slice(0, 3);
+  const queues = {
+    needs_action: workspace.queues.needsAction.items,
+    in_progress: workspace.queues.inProgress.items,
+    billing: workspace.queues.billingAndClosing.items,
+    closed: workspace.queues.closedToday.items,
+  };
+  const selectedItems = selectedQueueKey === "all" ? [...queues.needs_action, ...queues.in_progress, ...queues.billing, ...queues.closed] : queues[selectedQueueKey];
+  const activeCaseCount = queues.needs_action.length + queues.in_progress.length + queues.billing.length;
+  const delayedCount = queueControl.rightPanel.delayedCases.filter((item) => item.severity === "critical" || item.severity === "warning").length;
 
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-slate-100/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
-      <div className="space-y-3">
-      <WorkspaceHeader
-        title="Qabulxona ish stoli"
-        subtitle="Bugungi qabul, shifokorga yo‘naltirish va bemor oqimini boshqarish."
-        branch={mockBranches[0]}
-        meta={[
-          { label: "Sana", value: "Bugun" },
-          { label: "Smena", value: "Qabulxona" },
-          { label: "Faol holatlar", value: String(activeCaseCount) },
-        ]}
-        primaryAction={{ label: "Yangi qabul", href: "/app/reception/intake/new" }}
-      />
-
-      <SummaryStrip items={workspace.summary.map(localizeSummaryItem)} />
-
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_350px]">
-        <main className="min-w-0 space-y-3">
-          <OperatorFocusPanel queueItemsByVisitId={queueItemsByVisitId} visits={priorityVisits} />
-
-          <QueueSection
-            title="Harakat kerak"
-            description="Qabulxona tomonidan shifokor biriktirish yoki navbatga yuborish kutilayotgan tashriflar."
-            count={workspace.queues.needsAction.count}
-            items={workspace.queues.needsAction.items}
-            renderItem={(visit, index) => (
-              <ReceptionVisitRow
-                queueItem={queueItemsByVisitId.get(visit.id)}
-                queueLabel="Harakat kerak"
-                queuePosition={index + 1}
-                visit={visit}
-              />
+    <div>
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_330px]">
+        <main className="min-w-0">
+          <WorkbenchListCard
+            title="Qabul oqimi"
+            summary={`${selectedItems.length} holat / avval 8 qator ko'rinadi`}
+            selectedKey={selectedQueueKey}
+            selector={[
+              { key: "needs_action", label: "Harakat kerak", count: workspace.queues.needsAction.count, href: "/app/reception?queue=needs_action" },
+              { key: "in_progress", label: "Jarayonda", count: workspace.queues.inProgress.count, href: "/app/reception?queue=in_progress" },
+              { key: "billing", label: "To'lov", count: workspace.queues.billingAndClosing.count, href: "/app/reception?queue=billing" },
+              { key: "closed", label: "Yopilgan", count: workspace.queues.closedToday.count, href: "/app/reception?queue=closed" },
+              { key: "all", label: "Barchasi", count: activeCaseCount + queues.closed.length, href: "/app/reception?queue=all" },
+            ]}
+            filters={["Doctor", "Department", "SLA", "Priority"]}
+            fullListHref="/app/reception/queue"
+            fullListLabel="To'liq navbat"
+            searchPlaceholder="List ichida qidirish..."
+          >
+            {selectedItems.length ? (
+              <>
+                <WorkbenchTableHeader />
+                <WorkbenchRowLimit initialCount={8}>
+                  {selectedItems.map((visit) => (
+                    <ReceptionWorkbenchRow key={visit.id} queueItem={queueItemsByVisitId.get(visit.id)} visit={visit} />
+                  ))}
+                </WorkbenchRowLimit>
+              </>
+            ) : (
+              <div className="border-t border-slate-100 px-3 py-8 text-center text-sm text-slate-500">Bu ko&apos;rinishda ochiq holat yo&apos;q.</div>
             )}
-            emptyTitle="Qabulxonada bajarilishi kerak bo‘lgan harakat yo‘q."
-            emptyDescription="Yangi qabul, shifokor biriktirish va navbat ishlari hozircha toza."
-          />
-
-          <QueueSection
-            title="Jarayonda"
-            description="Klinik yoki diagnostika jarayonida harakatlanayotgan tashriflar."
-            count={workspace.queues.inProgress.count}
-            items={workspace.queues.inProgress.items}
-            renderItem={(visit, index) => (
-              <ReceptionVisitRow
-                queueItem={queueItemsByVisitId.get(visit.id)}
-                queueLabel="Jarayonda"
-                queuePosition={index + 1}
-                visit={visit}
-              />
-            )}
-            emptyTitle="Jarayondagi faol tashriflar yo‘q."
-            emptyDescription="Klinik workflow’dagi faol tashriflar shu yerda ko‘rinadi."
-          />
-
-          <QueueSection
-            title="To‘lov / yakunlash"
-            description="Hisob, to‘lov yoki yakuniy yopishni kutayotgan tashriflar."
-            count={workspace.queues.billingAndClosing.count}
-            items={workspace.queues.billingAndClosing.items}
-            renderItem={(visit, index) => (
-              <ReceptionVisitRow
-                queueItem={queueItemsByVisitId.get(visit.id)}
-                queueLabel="To‘lov"
-                queuePosition={index + 1}
-                visit={visit}
-              />
-            )}
-            emptyTitle="To‘lov yoki yakunlash kutayotgan tashrif yo‘q."
-            emptyDescription="Kassa va yopish bo‘yicha topshiriqlar hozircha yo‘q."
-          />
-
-          <QueueSection
-            title="Bugun yopilgan"
-            description="Bugungi smenada yakunlangan yoki bekor qilingan tashriflar."
-            count={workspace.queues.closedToday.count}
-            items={workspace.queues.closedToday.items}
-            renderItem={(visit, index) => (
-              <ReceptionVisitRow
-                queueItem={queueItemsByVisitId.get(visit.id)}
-                queueLabel="Yopilgan"
-                queuePosition={index + 1}
-                visit={visit}
-              />
-            )}
-            emptyTitle="Bugun yopilgan tashriflar hali yo‘q."
-            emptyDescription="Yakunlangan yoki bekor qilingan tashriflar shu yerda chiqadi."
-            maxVisibleItems={4}
-            viewAllHref="/app/visits"
-          />
+          </WorkbenchListCard>
         </main>
 
-        <WorkspaceRightPanel
-          sections={buildRightPanelSections(
-            workspace.rightPanel,
-            queueControl.rightPanel.doctorLoad,
-            queueControl.rightPanel.bottlenecks,
-          )}
-        />
+        <aside className="space-y-3">
+          <FlowChartPanel
+            items={[
+              { label: "Harakat", value: workspace.queues.needsAction.count, href: "/app/reception?queue=needs_action", tone: "warning" },
+              { label: "Jarayon", value: workspace.queues.inProgress.count, href: "/app/reception?queue=in_progress", tone: "accent" },
+              { label: "To'lov", value: workspace.queues.billingAndClosing.count, href: "/app/reception?queue=billing", tone: "warning" },
+              { label: "Yopilgan", value: workspace.queues.closedToday.count, href: "/app/reception?queue=closed", tone: "success" },
+              { label: "SLA", value: delayedCount, href: "/app/reception/delayed", tone: delayedCount ? "danger" : "neutral" },
+            ]}
+            controlItems={queueControl.summary}
+          />
+          <TodayAppointments appointments={workspace.rightPanel.todayAppointments} />
+          <DoctorLoadPanel doctors={queueControl.rightPanel.doctorLoad} />
+          <RecentRegistrationsPanel patients={workspace.rightPanel.recentRegistrations} />
+          <AlertsPanel delayedCases={queueControl.rightPanel.delayedCases} bottlenecks={queueControl.rightPanel.bottlenecks} />
+        </aside>
       </section>
-      </div>
     </div>
   );
 }
 
-function OperatorFocusPanel({
-  visits,
-  queueItemsByVisitId,
-}: {
-  visits: VisitListItem[];
-  queueItemsByVisitId: Map<string, ReceptionQueueItem>;
-}) {
+function ReceptionWorkbenchRow({ visit, queueItem }: { visit: VisitListItem; queueItem?: ReceptionQueueItem }) {
+  const action = receptionOwnedAction(visit.nextAction, visit.workflowStatus, visit.id);
   return (
-    <section className="overflow-hidden rounded-xl border border-amber-200/80 bg-white shadow-[0_1px_2px_rgba(146,64,14,0.08)]">
-      <div className="h-1 bg-amber-400" />
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-amber-200/70 bg-amber-50/80 px-3 py-2">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-slate-950">Operator e’tiborida</h2>
-          <p className="mt-0.5 text-xs leading-5 text-amber-900/70">
-            Eng muhim qabul, to‘lov va kechikkan holatlar.
-          </p>
-        </div>
-        <Link
-          className="shrink-0 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:border-amber-300 hover:bg-amber-50"
-          href="/app/reception/queue"
-        >
-          To‘liq navbat
-        </Link>
-      </div>
-
-      {visits.length ? (
-        <div className="grid gap-2 bg-amber-50/25 p-2 lg:grid-cols-3">
-          {visits.map((visit) => (
-            <FocusVisitCard
-              key={visit.id}
-              queueItem={queueItemsByVisitId.get(visit.id)}
-              visit={visit}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="bg-amber-50/25 p-2">
-          <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">
-            Hozir qabulxonada ustuvor holatlar yo‘q.
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function FocusMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-amber-100 bg-white/80 px-1.5 py-1">
-      <div className="font-semibold uppercase tracking-wide text-amber-900/60">{label}</div>
-      <div className="mt-0.5 truncate font-bold text-slate-900">{value}</div>
-    </div>
-  );
-}
-
-function FocusVisitCard({
-  visit,
-  queueItem,
-}: {
-  visit: VisitListItem;
-  queueItem?: ReceptionQueueItem;
-}) {
-  const action = localizeAction(visit.nextAction);
-
-  return (
-    <Link
-      className="group rounded-xl border border-amber-100 bg-white p-2.5 shadow-[0_1px_1px_rgba(146,64,14,0.06)] ring-1 ring-white/70 transition-colors hover:border-amber-200 hover:bg-amber-50/35"
-      href={resolveActionHref(visit.nextAction, visit)}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold leading-5 text-slate-950">
-            {visit.patient.fullName}
-          </div>
-          <div className="mt-0.5 truncate text-xs text-slate-500">
-            {visit.visitCode} / {queueItem?.queueNumber ?? "Navbat yo‘q"} / {visit.patient.phone ?? "Telefon yo‘q"}
-          </div>
-        </div>
-        <StatusBadge badge={localizeStatusBadge(visit.workflowBadge)} size="sm" />
-      </div>
-
-      <div className="mt-2 grid grid-cols-3 gap-1.5 text-[10.5px]">
-        <FocusMetric label="Kutish" value={formatMinutes(queueItem?.waitingMinutes)} />
-        <FocusMetric label="SLA" value={formatSla(queueItem?.slaState)} />
-        <FocusMetric label="Ustuvor" value={formatPriority(queueItem?.priority)} />
-      </div>
-
-      <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-950">
-        <span className="font-semibold text-teal-700">Keyingi</span>
-        <span className="ml-1 font-medium">{action.label}</span>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="truncate text-[11px] font-medium text-slate-500">
-          {formatOwnerRole(queueItem?.ownerRole)} / {visit.department?.name ?? "Bo‘lim tanlanmagan"}
-        </span>
-        <span className="inline-flex h-7 shrink-0 items-center rounded-lg bg-teal-700 px-2.5 text-xs font-semibold text-white shadow-[0_1px_2px_rgba(15,118,110,0.25)] group-hover:bg-teal-800">
-          {action.cta || "Tashrifni ochish"}
-        </span>
-      </div>
-    </Link>
-  );
-}
-
-function ReceptionVisitRow({
-  visit,
-  queueLabel,
-  queuePosition,
-  queueItem,
-}: {
-  visit: VisitListItem;
-  queueLabel: string;
-  queuePosition: number;
-  queueItem?: ReceptionQueueItem;
-}) {
-  return (
-    <OperatorCaseRow
-      identity={{
-        title: visit.patient.fullName,
-        subtitle: formatPatientSubtitle(visit),
-        href: `/app/visits/${visit.id}`,
-      }}
+    <WorkbenchTableRow
+      title={visit.patient.fullName}
+      subtitle={[visit.patient.patientCode, visit.patient.phone].filter(Boolean).join(" / ")}
+      href={`/app/visits/${visit.id}`}
       reference={visit.visitCode}
-      context={formatVisitContext(visit)}
+      context={[visit.department?.name, visit.doctor?.fullName ?? "Shifokor biriktirilmagan", visit.reason].filter(Boolean).join(" / ")}
       primaryBadge={localizeStatusBadge(visit.workflowBadge)}
       secondaryBadge={visit.invoiceBadge ? localizeStatusBadge(visit.invoiceBadge) : undefined}
-      nextAction={localizeAction(visit.nextAction)}
-      primaryAction={{
-        label: localizeAction(visit.nextAction).cta || "Tashrifni ochish",
-        href: resolveActionHref(visit.nextAction, visit),
-      }}
+      signals={[formatMinutes(queueItem?.waitingMinutes), formatSla(queueItem?.slaState), visit.doctor?.fullName ?? "Owner yo'q"]}
+      nextAction={action.label}
+      primaryAction={{ label: action.cta, href: action.href }}
       secondaryActions={[
-        { label: "Tashrif", href: `/app/visits/${visit.id}` },
-        { label: "Bemor", href: `/app/patients/${visit.patient.id}` },
-      ]}
-      meta={[
-        { label: "Navbat", value: `${queueLabel} #${queuePosition}` },
-        { label: "Raqam", value: queueItem?.queueNumber ?? "Yo‘q" },
-        { label: "Kutish", value: formatMinutes(queueItem?.waitingMinutes) },
-        { label: "SLA", value: formatSla(queueItem?.slaState) },
-        { label: "Ustuvorlik", value: formatPriority(queueItem?.priority) },
-        { label: "Mas’ul", value: formatOwnerRole(queueItem?.ownerRole) },
-        { label: "Tashrif yoshi", value: formatMinutes(queueItem?.visitAgeMinutes) },
-        { label: "Shifokor", value: visit.doctor?.fullName ?? "Biriktirilmagan" },
-        { label: "Hisob", value: formatInvoiceSignal(visit) },
+        { label: "Tashrifni ochish", href: `/app/visits/${visit.id}`, variant: "secondary" },
+        { label: "Bemor profili", href: `/app/patients/${visit.patient.id}`, variant: "secondary" },
+        { label: "Navbat", href: "/app/reception/queue", variant: "secondary" },
       ]}
     />
   );
 }
 
-function buildRightPanelSections(rightPanel: {
-  todayAppointments: AppointmentListItem[];
-  recentRegistrations: PatientListItem[];
-  delayedCases: VisitListItem[];
-}, doctorLoad: ReceptionDoctorAvailability[], bottlenecks: string[]): WorkspaceRightPanelSection[] {
-  const waitingForDoctor = rightPanel.delayedCases.filter(
-    (visit) => visit.workflowStatus === "queued_for_doctor",
-  ).length;
-  const billingWaiting = rightPanel.delayedCases.filter(
-    (visit) => visit.workflowStatus === "billing_pending" || visit.workflowStatus === "partially_paid",
-  ).length;
-
-  return [
-    {
-      title: "Tez bemor qidirish",
-      items: [
-        <div className="space-y-2" key="patient-search">
-          <input
-            className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm outline-none placeholder:text-slate-400 focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
-            placeholder="Ism, telefon yoki bemor kodi"
-            type="search"
-          />
-          <p className="text-xs leading-5 text-slate-500">Bemorni ism, telefon yoki bemor kodi orqali qidiring.</p>
-          <div className="grid grid-cols-2 gap-2">
-            <Link
-              className="inline-flex h-7 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
-              href="/app/patients/new"
-            >
-              Yangi bemor
-            </Link>
-            <Link
-              className="inline-flex h-7 items-center justify-center rounded-lg border border-teal-700 bg-teal-700 px-2 text-xs font-semibold text-white shadow-[0_1px_2px_rgba(15,118,110,0.25)] hover:bg-teal-800"
-              href="/app/reception/intake/new"
-            >
-              Yangi qabul
-            </Link>
-          </div>
-        </div>,
-      ],
-    },
-    {
-      title: "Qabulxona bo‘limlari",
-      items: [
-        <div className="grid grid-cols-2 gap-2" key="module-shortcuts">
-          <ShortcutLink href="/app/reception/intake/new" label="Yangi qabul" />
-          <ShortcutLink href="/app/reception/patient-search" label="Bemor qidirish" />
-          <ShortcutLink href="/app/reception/check-in" label="Check-in" />
-          <ShortcutLink href="/app/reception/walk-ins" label="Navbatsizlar" />
-          <ShortcutLink href="/app/reception/queue" label="Navbat boshqaruvi" />
-          <ShortcutLink href="/app/reception/delayed" label="Kechikkanlar" />
-        </div>,
-      ],
-    },
-    {
-      title: "Bugungi qabullar",
-      items: rightPanel.todayAppointments.slice(0, 5).map((appointment) => (
-        <AppointmentLine appointment={appointment} key={appointment.id} />
-      )),
-      emptyTitle: "Bugun rejalashtirilgan qabul yo‘q.",
-      emptyDescription: "Rejadagi qabullar shu yerda ko‘rinadi.",
-    },
-    {
-      title: "Qabulxona nazorati",
-      items: [
-        <ControlMetric
-          href="/app/reception/queue"
-          key="waiting-for-doctor"
-          label="Shifokor kutayotganlar"
-          value={waitingForDoctor}
-          tone="warning"
-        />,
-        <ControlMetric
-          href="/app/cashier"
-          key="billing-waiting"
-          label="To‘lov kutayotganlar"
-          value={billingWaiting}
-          tone="success"
-        />,
-        <ControlMetric
-          href="/app/reception/patient-search"
-          key="recent-registrations"
-          label="Yangi ro‘yxatlar"
-          value={rightPanel.recentRegistrations.length}
-          tone="neutral"
-        />,
-      ],
-    },
-    {
-      title: "Shifokor yuklamasi",
-      items: doctorLoad.slice(0, 5).map((availability) => (
-        <DoctorLoadLine availability={availability} key={availability.doctor.id} />
-      )),
-      emptyTitle: "Shifokor yuklamasi ko‘rinmayapti.",
-      emptyDescription: "Shifokor navbatlari mavjud bo‘lganda shu yerda chiqadi.",
-    },
-    {
-      title: "Tiqilish signallari",
-      items: bottlenecks.slice(0, 4).map((bottleneck) => (
-        <BottleneckLine key={bottleneck} text={localizeBottleneck(bottleneck)} />
-      )),
-      emptyTitle: "Tiqilish signallari yo‘q.",
-      emptyDescription: "Navbat, to‘lov yoki diagnostika tiqilishlari shu yerda ko‘rinadi.",
-    },
-    {
-      title: "Kechikkan holatlar",
-      items: rightPanel.delayedCases.slice(0, 5).map((visit) => (
-        <DelayedVisitLine visit={visit} key={visit.id} />
-      )),
-      emptyTitle: "Kechikkan holatlar yo‘q.",
-      emptyDescription: "Kutilgan vaqtdan oshgan tashriflar shu yerda chiqadi.",
-    },
-    {
-      title: "Yangi ro‘yxatdan o‘tganlar",
-      items: rightPanel.recentRegistrations.slice(0, 5).map((patient) => (
-        <PatientLine patient={patient} key={patient.id} />
-      )),
-      emptyTitle: "Yangi ro‘yxatdan o‘tgan bemorlar yo‘q.",
-      emptyDescription: "Yangi bemorlar shu yerda ko‘rinadi.",
-    },
-  ];
-}
-
-function ShortcutLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      className="inline-flex h-8 min-w-0 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-center text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800"
-      href={href}
-    >
-      <span className="truncate">{label}</span>
-    </Link>
-  );
-}
-
-function AppointmentLine({ appointment }: { appointment: AppointmentListItem }) {
-  return (
-    <Link className="block min-w-0 hover:text-teal-700" href={`/app/appointments/${appointment.id}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-950">
-            {appointment.patient.fullName}
-          </div>
-          <div className="mt-0.5 truncate text-xs text-slate-600">
-            {formatTime(appointment.scheduledStart)} / {appointment.doctor.fullName}
-          </div>
-          <div className="mt-1 text-[10.5px] font-medium uppercase tracking-wide text-slate-400">
-            Qabul navbati
-          </div>
-        </div>
-        <StatusBadge badge={localizeStatusBadge(appointment.statusBadge)} size="sm" />
-      </div>
-    </Link>
-  );
-}
-
-function PatientLine({ patient }: { patient: PatientListItem }) {
-  return (
-    <Link className="block min-w-0 hover:text-teal-700" href={`/app/patients/${patient.id}`}>
-      <div className="truncate text-sm font-semibold text-slate-950">{patient.fullName}</div>
-      <div className="mt-0.5 truncate text-xs text-slate-600">
-        {patient.patientCode} / {patient.phone ?? "Telefon yo‘q"}
-      </div>
-      <div className="mt-1 text-[10.5px] font-medium uppercase tracking-wide text-slate-400">
-        {patient.activeVisitId ? "Faol tashrif" : patient.lastVisitAt ? `Oxirgi tashrif ${formatElapsed(patient.lastVisitAt)}` : "Yangi ro‘yxat"}
-      </div>
-    </Link>
-  );
-}
-
-function ControlMetric({
-  label,
-  value,
-  href,
-  tone,
+function FlowChartPanel({
+  items,
+  controlItems,
 }: {
-  label: string;
-  value: number;
-  href: string;
-  tone: "neutral" | "warning" | "success";
+  items: { label: string; value: number; href: string; tone: "neutral" | "accent" | "warning" | "danger" | "success" }[];
+  controlItems: { key: string; label: string; count: number; tone?: string }[];
 }) {
+  const max = Math.max(...items.map((item) => item.value), ...controlItems.map((item) => item.count), 1);
   return (
-    <Link className="flex items-center justify-between gap-3 hover:text-teal-700" href={href}>
-      <span className="min-w-0 truncate text-xs font-semibold text-slate-700">{label}</span>
-      <span className={["rounded-full border px-2 py-0.5 text-xs font-bold", getMetricToneClass(tone)].join(" ")}>
-        {value}
-      </span>
-    </Link>
-  );
-}
-
-function DoctorLoadLine({ availability }: { availability: ReceptionDoctorAvailability }) {
-  return (
-    <div className="min-w-0">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-950">
-            {availability.doctor.fullName}
-          </div>
-          <div className="mt-0.5 truncate text-xs text-slate-600">
-            {availability.department.name} / xona {availability.room ?? "yo‘q"}
-          </div>
+    <section className="rounded-md border border-slate-200 bg-white p-3">
+      <h2 className="text-sm font-semibold text-slate-950">Oqim holati</h2>
+      <div className="mt-2 space-y-2">
+        {items.map((item) => (
+          <Link className="grid grid-cols-[70px_minmax(0,1fr)_28px] items-center gap-2 text-xs hover:bg-slate-50" href={item.href} key={item.label}>
+            <span className="font-semibold text-slate-600">{item.label}</span>
+            <span className="h-2 rounded-full bg-slate-100">
+              <span className={["block h-2 rounded-full", flowToneClass(item.tone)].join(" ")} style={{ width: `${Math.max(8, Math.round((item.value / max) * 100))}%` }} />
+            </span>
+            <span className="text-right font-mono font-semibold text-slate-800">{item.value}</span>
+          </Link>
+        ))}
+      </div>
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-normal text-slate-500">Navbat nazorati</h3>
+          <Link className="text-xs font-semibold text-teal-700" href="/app/reception/queue">Open</Link>
         </div>
-        <span className={["rounded-full border px-2 py-0.5 text-[11px] font-semibold", getDoctorStatusTone(availability.status)].join(" ")}>
-          {formatDoctorStatus(availability.status)}
-        </span>
-      </div>
-      <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
-        <span className="rounded-lg border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600">
-          Navbat: <b className="text-slate-950">{availability.currentQueueCount}</b>
-        </span>
-        <span className="rounded-lg border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600">
-          Kutish: <b className="text-slate-950">{availability.estimatedWaitMinutes} daq</b>
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function BottleneckLine({ text }: { text: string }) {
-  return (
-    <div className="rounded-lg border border-amber-100 bg-amber-50/80 px-2 py-1.5 text-xs font-medium leading-5 text-amber-900">
-      {text}
-    </div>
-  );
-}
-
-function DelayedVisitLine({ visit }: { visit: VisitListItem }) {
-  return (
-    <Link className="block min-w-0 hover:text-teal-700" href={`/app/visits/${visit.id}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-950">
-            {visit.patient.fullName}
-          </div>
-          <div className="mt-0.5 truncate text-xs text-slate-600">
-            {visit.visitCode} / {localizeAction(visit.nextAction).label}
-          </div>
-          <div className="mt-1 text-[10.5px] font-medium uppercase tracking-wide text-amber-700">
-            Kutmoqda {formatElapsed(visit.updatedAt)}
-          </div>
+        <div className="space-y-2">
+          {controlItems.slice(0, 4).map((item) => (
+            <Link className="grid grid-cols-[86px_minmax(0,1fr)_28px] items-center gap-2 text-xs hover:bg-slate-50" href="/app/reception/queue" key={item.key}>
+              <span className="truncate font-semibold text-slate-600">{localizeControlLabel(item.label)}</span>
+              <span className="h-2 rounded-full bg-slate-100">
+                <span className={["block h-2 rounded-full", controlToneClass(item.tone)].join(" ")} style={{ width: `${Math.max(8, Math.round((item.count / max) * 100))}%` }} />
+              </span>
+              <span className="text-right font-mono font-semibold text-slate-800">{item.count}</span>
+            </Link>
+          ))}
         </div>
-        <StatusBadge badge={localizeStatusBadge(visit.workflowBadge)} size="sm" />
       </div>
-    </Link>
+    </section>
   );
 }
 
-function dedupeVisits(visits: VisitListItem[]): VisitListItem[] {
-  const seen = new Set<string>();
-  const result: VisitListItem[] = [];
-
-  for (const visit of visits) {
-    if (seen.has(visit.id)) continue;
-    seen.add(visit.id);
-    result.push(visit);
-  }
-
-  return result;
+function flowToneClass(tone: "neutral" | "accent" | "warning" | "danger" | "success"): string {
+  if (tone === "accent") return "bg-teal-600";
+  if (tone === "warning") return "bg-amber-500";
+  if (tone === "danger") return "bg-red-600";
+  if (tone === "success") return "bg-emerald-600";
+  return "bg-slate-300";
 }
 
-function getMetricToneClass(tone: "neutral" | "warning" | "success"): string {
-  if (tone === "warning") return "border-amber-200 bg-amber-50 text-amber-900";
-  if (tone === "success") return "border-emerald-200 bg-emerald-50 text-emerald-800";
-  return "border-slate-200 bg-slate-50 text-slate-800";
+function controlToneClass(tone?: string): string {
+  if (tone === "danger") return "bg-red-600";
+  if (tone === "warning") return "bg-amber-500";
+  if (tone === "accent" || tone === "info") return "bg-teal-600";
+  if (tone === "success") return "bg-emerald-600";
+  return "bg-slate-300";
 }
 
-function getDoctorStatusTone(status: ReceptionDoctorAvailability["status"]): string {
-  if (status === "available") return "border-emerald-200 bg-emerald-50 text-emerald-800";
-  if (status === "busy") return "border-amber-200 bg-amber-50 text-amber-900";
-  if (status === "unavailable") return "border-red-200 bg-red-50 text-red-800";
-  return "border-slate-200 bg-slate-100 text-slate-600";
+function TodayAppointments({ appointments }: { appointments: AppointmentListItem[] }) {
+  return (
+    <section className="rounded-md border border-slate-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-slate-950">Bugungi qabullar</h2>
+        <Link className="text-xs font-semibold text-teal-700" href="/app/reception/appointments-today">View all</Link>
+      </div>
+      <div className="mt-2 divide-y divide-slate-100">
+        {appointments.slice(0, 5).map((appointment) => (
+          <Link className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 py-2 hover:bg-slate-50" href={`/app/appointments/${appointment.id}`} key={appointment.id}>
+            <span className="font-mono text-xs font-semibold text-slate-700">{formatTime(appointment.scheduledStart)}</span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-slate-900">{appointment.patient.fullName}</span>
+              <span className="block truncate text-xs text-slate-500">{appointment.doctor.fullName}</span>
+            </span>
+            <span className="text-xs font-semibold text-slate-500">{localizeText(appointment.statusBadge.label)}</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
 }
 
-function formatDoctorStatus(status: ReceptionDoctorAvailability["status"]): string {
-  if (status === "available") return "Mavjud";
-  if (status === "busy") return "Band";
-  if (status === "unavailable") return "Mavjud emas";
-  return "Smenada emas";
+function RecentRegistrationsPanel({ patients }: { patients: PatientListItem[] }) {
+  return (
+    <section className="rounded-md border border-slate-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-slate-950">Yangi ro&apos;yxatlar</h2>
+        <Link className="text-xs font-semibold text-teal-700" href="/app/reception/patient-search">Bemorlar</Link>
+      </div>
+      <div className="mt-2 divide-y divide-slate-100">
+        {patients.slice(0, 5).map((patient) => (
+          <Link className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2 hover:bg-slate-50" href={`/app/patients/${patient.id}`} key={patient.id}>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-slate-900">{patient.fullName}</span>
+              <span className="block truncate text-xs text-slate-500">{[patient.patientCode, patient.phone].filter(Boolean).join(" / ")}</span>
+            </span>
+            <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600">Ochish</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
 }
 
-function formatMinutes(value?: number): string {
-  if (typeof value !== "number") return "Yo‘q";
-  if (value < 60) return `${value} daq`;
-  const hours = Math.floor(value / 60);
-  const minutes = value % 60;
-  return minutes ? `${hours} soat ${minutes} daq` : `${hours} soat`;
+function DoctorLoadPanel({ doctors }: { doctors: ReceptionDoctorAvailability[] }) {
+  const max = Math.max(...doctors.map((item) => item.currentQueueCount), 1);
+  return (
+    <section className="rounded-md border border-slate-200 bg-white p-3">
+      <h2 className="text-sm font-semibold text-slate-950">Shifokor yuklamasi</h2>
+      <div className="mt-2 space-y-2">
+        {doctors.slice(0, 5).map((item) => (
+          <div className="grid gap-1" key={item.doctor.id}>
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="truncate font-semibold text-slate-800">{item.doctor.fullName}</span>
+              <span className="text-slate-500">{item.currentQueueCount} / {item.estimatedWaitMinutes} daq</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-slate-100">
+              <div className="h-1.5 rounded-full bg-teal-600" style={{ width: `${Math.round((item.currentQueueCount / max) * 100)}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
-function formatPriority(priority?: ReceptionQueueItem["priority"]): string {
-  if (priority === "emergency") return "Shoshilinch";
-  if (priority === "urgent") return "Tezkor";
-  if (priority === "vip") return "VIP";
-  return "Oddiy";
+function AlertsPanel({ delayedCases, bottlenecks }: { delayedCases: ReceptionDelayedCase[]; bottlenecks: string[] }) {
+  const alerts = [
+    ...delayedCases.map((item) => ({
+      id: item.id,
+      title: item.visit.patient.fullName,
+      detail: `${formatDelayType(item.delayType)} / ${item.waitingMinutes} daq / ${item.owner}`,
+      critical: item.severity === "critical",
+      href: "/app/reception/delayed",
+    })),
+    ...bottlenecks.map((item) => ({ id: item, title: "Operatsion signal", detail: localizeBottleneck(item), critical: false, href: "/app/reception/delayed" })),
+  ];
+  return (
+    <section className="rounded-md border border-slate-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-slate-950">Ogohlantirishlar</h2>
+        <Link className="text-xs font-semibold text-teal-700" href="/app/reception/delayed">Hammasi</Link>
+      </div>
+      <div className="mt-2 divide-y divide-slate-100">
+        {alerts.slice(0, 4).map((alert) => (
+          <Link className="block py-2 hover:bg-slate-50" href={alert.href} key={alert.id}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-sm font-semibold text-slate-900">{alert.title}</span>
+              <span className={alert.critical ? "text-xs font-semibold text-red-700" : "text-xs font-semibold text-amber-700"}>{alert.critical ? "Kritik" : "Ogoh"}</span>
+            </div>
+            <div className="truncate text-xs text-slate-500">{alert.detail}</div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
 }
 
-function formatSla(state?: ReceptionQueueItem["slaState"]): string {
-  if (state === "breached") return "Buzilgan";
-  if (state === "warning") return "Ogoh";
-  return "Normal";
+function normalizeQueueKey(value?: string): QueueKey {
+  if (value === "in_progress" || value === "billing" || value === "closed" || value === "all") return value;
+  return "all";
 }
 
-function formatOwnerRole(role?: string | null): string {
-  if (role === "doctor") return "Shifokor";
-  if (role === "cashier") return "Kassa";
-  if (role === "lab_operator") return "Laboratoriya";
-  if (role === "radiology_operator") return "Radiologiya";
-  if (role === "receptionist") return "Qabulxona";
-  return "Mas’ul yo‘q";
-}
-
-function localizeBottleneck(value: string): string {
-  const labels: Record<string, string> = {
-    "Cardiology queue exceeds 30 minutes.": "Kardiologiya navbati 30 daqiqadan oshgan.",
-    "Two paid visits are not closed.": "Ikkita to‘langan tashrif hali yopilmagan.",
-    "Lab pending cases need ownership confirmation.": "Laboratoriya kutayotgan holatlar uchun mas’ul tasdiqlanishi kerak.",
-  };
-  return labels[value] ?? value;
-}
-
-function localizeSummaryItem<T extends { label: string }>(item: T): T {
-  return { ...item, label: localizeText(item.label) };
+function receptionOwnedAction(action: NextActionData, workflowStatus: string, visitId: string): { label: string; cta: string; href: string } {
+  if (workflowStatus === "intake_created") return { label: "Shifokor biriktirish", cta: "Biriktirish", href: "/app/reception/intake/new" };
+  if (workflowStatus === "doctor_assigned") return { label: "Navbatga qo'yish", cta: "Navbat", href: "/app/reception/queue" };
+  if (["consultation_completed", "billing_pending", "partially_paid"].includes(workflowStatus)) return { label: "To'lovni yakunlash", cta: "To'lov", href: "/app/reception/queue" };
+  if (workflowStatus === "paid") return { label: "Tashrifni yopish", cta: "Yopish", href: "/app/reception/queue" };
+  if (workflowStatus === "completed" || workflowStatus === "cancelled") return { label: "Tashrifni ko'rish", cta: "Ko'rish", href: `/app/visits/${visitId}` };
+  return { label: localizeText(action.label), cta: localizeText(action.cta), href: action.targetRoute?.replace("[id]", visitId) ?? "/app/reception/queue" };
 }
 
 function localizeStatusBadge(badge: StatusBadgeData): StatusBadgeData {
   return { ...badge, label: localizeText(badge.label) };
 }
 
-function localizeAction(action: NextActionData): NextActionData {
-  return {
-    ...action,
-    label: localizeText(action.label),
-    cta: localizeText(action.cta),
-    reason: action.reason ? localizeText(action.reason) : undefined,
-  };
-}
-
-function localizeText(value: string): string {
+function localizeText(value?: string): string {
+  if (!value) return "";
   const labels: Record<string, string> = {
-    "Needs action": "Harakat kerak",
-    "In progress": "Jarayonda",
-    "Billing / closing": "To‘lov / yakunlash",
-    "Closed today": "Bugun yopilgan",
-    Delayed: "Kechikkan",
-    Scheduled: "Rejalashtirilgan",
-    Confirmed: "Tasdiqlangan",
+    Confirmed: "Tasdiq",
     Arrived: "Kelgan",
-    "Checked in": "Check-in qilingan",
-    "Converted to visit": "Tashrifga aylantirilgan",
-    "No show": "Kelmadi",
-    Cancelled: "Bekor qilingan",
     "Intake created": "Qabul yaratildi",
     "Doctor assigned": "Shifokor biriktirildi",
     "Queued for doctor": "Shifokor navbatida",
     "With doctor": "Shifokorda",
-    "Awaiting lab": "Laboratoriya kutmoqda",
-    "Lab in progress": "Laboratoriya jarayonda",
-    "Awaiting radiology": "Radiologiya kutmoqda",
-    "Radiology in progress": "Radiologiya jarayonda",
-    "Awaiting procedure": "Muolaja kutmoqda",
-    "Procedure in progress": "Muolaja jarayonda",
-    "Awaiting doctor review": "Shifokor ko‘rigi kutmoqda",
+    "Awaiting doctor review": "Review kutmoqda",
     "Consultation completed": "Konsultatsiya tugadi",
-    "Billing pending": "To‘lov kutilmoqda",
-    "Partially paid": "Qisman to‘langan",
-    Paid: "To‘langan",
+    "Billing pending": "To'lov kutilmoqda",
+    "Partially paid": "Qisman to'langan",
+    Paid: "To'langan",
     Completed: "Yakunlangan",
-    "Assign doctor": "Shifokor biriktirish",
-    "Queue patient": "Bemorni navbatga qo‘yish",
+    Cancelled: "Bekor qilingan",
     "Open visit": "Tashrifni ochish",
-    "Check status": "Holatni tekshirish",
-    "Issue invoice": "Hisob chiqarish",
-    "Record payment": "To‘lov kiritish",
-    "Collect remaining": "Qolgan to‘lovni olish",
-    "Complete visit": "Tashrifni yakunlash",
-    View: "Ko‘rish",
     Open: "Ochish",
-    "No action needed": "Harakat kerak emas",
-    "View only": "Faqat ko‘rish",
-    "Draft invoice": "Hisob qoralamasi",
-    Issued: "Chiqarilgan",
-    "No invoice": "Hisob yo‘q",
+    View: "Ko'rish",
   };
-
   return labels[value] ?? value;
 }
 
-function formatInvoiceSignal(visit: VisitListItem): string {
-  if (visit.invoiceBadge?.label) return visit.invoiceBadge.label;
-  if (visit.invoiceStatus) return visit.invoiceStatus.replaceAll("_", " ");
-  return "Hisob yo‘q";
+function localizeBottleneck(value: string): string {
+  const labels: Record<string, string> = {
+    "Cardiology queue exceeds 30 minutes.": "Kardiologiya navbati 30 daqiqadan oshgan.",
+    "Two paid visits are not closed.": "Ikkita to'langan tashrif hali yopilmagan.",
+    "Lab pending cases need ownership confirmation.": "Laboratoriya kutayotgan holatlar uchun mas'ul tasdiqlanishi kerak.",
+  };
+  return labels[value] ?? value;
 }
 
-function formatPatientSubtitle(visit: VisitListItem): string {
-  const parts = [
-    visit.patient.patientCode,
-    visit.patient.age ? `${visit.patient.age} yosh` : null,
-    formatGender(visit.patient.gender),
-    visit.patient.phone,
-  ].filter(Boolean);
-
-  return parts.join(" / ");
+function localizeControlLabel(value: string): string {
+  const labels: Record<string, string> = {
+    "Priority cases": "Priority",
+    "Waiting > 30m": "30m+ kutish",
+    "Billing / closing": "To'lov",
+    Unresolved: "Ochiq signal",
+  };
+  return labels[value] ?? value;
 }
 
-function formatGender(gender: VisitListItem["patient"]["gender"]): string | null {
-  if (gender === "male") return "Erkak";
-  if (gender === "female") return "Ayol";
-  if (gender === "other") return "Boshqa";
-  return null;
+function formatDelayType(value: ReceptionDelayedCase["delayType"]): string {
+  const labels: Record<ReceptionDelayedCase["delayType"], string> = {
+    waiting_for_doctor: "Shifokor kutmoqda",
+    lab_pending: "Laboratoriya kutmoqda",
+    radiology_pending: "Radiologiya kutmoqda",
+    billing_pending: "To'lov kutmoqda",
+    paid_not_closed: "To'langan, yopilmagan",
+    no_show_candidate: "Kelmadi ehtimoli",
+  };
+  return labels[value];
 }
 
-function formatVisitContext(visit: VisitListItem): string {
-  const parts = [
-    visit.department?.name,
-    visit.doctor?.fullName ?? "Shifokor biriktirilmagan",
-    visit.reason,
-  ].filter(Boolean);
-
-  return parts.join(" / ");
+function formatMinutes(value?: number): string {
+  if (typeof value !== "number") return "Kutish yo'q";
+  return value < 60 ? `${value} daq` : `${Math.floor(value / 60)} soat ${value % 60} daq`;
 }
 
-function resolveActionHref(action: NextActionData, visit: VisitListItem): string {
-  if (!action.targetRoute) return `/app/visits/${visit.id}`;
-
-  if (action.targetRoute.includes("/invoices/[id]")) {
-    return `/app/visits/${visit.id}`;
-  }
-
-  return action.targetRoute.replace("[id]", visit.id);
+function formatSla(value?: ReceptionQueueItem["slaState"]): string {
+  if (value === "breached") return "SLA buzilgan";
+  if (value === "warning") return "SLA ogoh";
+  return "SLA normal";
 }
 
 function formatTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-
-  return new Intl.DateTimeFormat("uz-UZ", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function formatElapsed(value: string): string {
-  const date = new Date(value);
-  const timestamp = date.getTime();
-
-  if (Number.isNaN(timestamp)) return "noma’lum";
-
-  const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60000));
-
-  if (minutes < 1) return "hozir";
-  if (minutes < 60) return `${minutes}m`;
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-
-  if (hours < 24) {
-    return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
-  }
-
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
+  return new Intl.DateTimeFormat("uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(date);
 }
