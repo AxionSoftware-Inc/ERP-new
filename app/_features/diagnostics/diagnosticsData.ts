@@ -6,7 +6,6 @@ import {
   staffMembers,
   type DiagnosticOrder,
 } from "../../_data/fakeClinicData";
-import { formatDateTime } from "../reception/receptionData";
 
 export type DiagnosticOrderRow = DiagnosticOrder & {
   patientName: string;
@@ -74,4 +73,4 @@ export function getDiagnosticDetail(orderId: string) {
   return { order, result };
 }
 
-export { formatDateTime };
+export { formatDateTime } from "../reception/receptionData";

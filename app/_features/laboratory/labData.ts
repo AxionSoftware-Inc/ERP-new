@@ -7,7 +7,6 @@ import {
   type LabOrder,
   type OrderStatus,
 } from "../../_data/fakeClinicData";
-import { formatDateTime } from "../reception/receptionData";
 
 export type LabOrderRow = LabOrder & {
   patientName: string;
@@ -83,4 +82,4 @@ export function getLabOrderDetail(orderId: string) {
   };
 }
 
-export { formatDateTime };
+export { formatDateTime } from "../reception/receptionData";

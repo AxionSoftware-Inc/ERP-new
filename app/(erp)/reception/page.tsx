@@ -1,5 +1,5 @@
-import { ReceptionDashboard } from "../../_features/reception/ReceptionDashboard";
+import { redirect } from "next/navigation";
 
 export default function ReceptionPage() {
-  return <ReceptionDashboard />;
+  redirect("/app/reception");
 }

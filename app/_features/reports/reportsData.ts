@@ -8,7 +8,7 @@ import {
   services,
   staffMembers,
 } from "../../_data/fakeClinicData";
-import { formatDateTime, formatMoney } from "../reception/receptionData";
+import { formatDateTime } from "../reception/receptionData";
 
 export function getRevenueSummary() {
   const billed = paymentInvoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0);
@@ -119,4 +119,4 @@ export function getDebtReportRows() {
     }));
 }
 
-export { formatDateTime, formatMoney };
+export { formatDateTime, formatMoney } from "../reception/receptionData";

@@ -1,5 +1,5 @@
-import { DoctorWorkbench } from "../../_features/doctor/DoctorWorkbench";
+import { redirect } from "next/navigation";
 
 export default function DoctorPage() {
-  return <DoctorWorkbench />;
+  redirect("/app/doctor");
 }

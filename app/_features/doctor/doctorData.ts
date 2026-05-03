@@ -15,7 +15,6 @@ import {
   type Appointment,
   type MedicalEncounter,
 } from "../../_data/fakeClinicData";
-import { formatDateTime, formatTime } from "../reception/receptionData";
 
 export type DoctorAppointmentRow = Appointment & {
   patientName: string;
@@ -131,4 +130,4 @@ export function calculateAge(birthDate: string) {
   return age;
 }
 
-export { formatDateTime, formatTime };
+export { formatDateTime, formatTime } from "../reception/receptionData";

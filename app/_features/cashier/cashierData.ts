@@ -1,5 +1,4 @@
 import { patients, paymentInvoiceItems, paymentInvoices, payments, services, staffMembers, type PaymentInvoice } from "../../_data/fakeClinicData";
-import { formatDateTime, formatMoney } from "../reception/receptionData";
 
 export type InvoiceRow = PaymentInvoice & {
   patientName: string;
@@ -75,4 +74,4 @@ export function getPaymentDetail(paymentId: string) {
   return { payment, invoice, items };
 }
 
-export { formatDateTime, formatMoney };
+export { formatDateTime, formatMoney } from "../reception/receptionData";

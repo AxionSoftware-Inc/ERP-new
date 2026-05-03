@@ -12,7 +12,6 @@ import {
   type Patient,
 } from "../../_data/fakeClinicData";
 import { calculateAge } from "../doctor/doctorData";
-import { formatDateTime, formatMoney } from "../reception/receptionData";
 
 export type PatientRow = Patient & {
   fullName: string;
@@ -59,4 +58,4 @@ export function getPatientDetail(patientId: string) {
   };
 }
 
-export { formatDateTime, formatMoney };
+export { formatDateTime, formatMoney } from "../reception/receptionData";
